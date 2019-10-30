@@ -14,10 +14,10 @@ type RuleSet []*regexp.Regexp
 
 // Public regexes
 var (
-	RegexEmail = regexp.MustCompile(`[A-Za-z0-9_.]+((\ ?(\[|\()?\ ?@\ ?(\)|\])?\ ?)|(\ ?(\[|\()\ ?[aA][tT]\ ?(\)|\])\ ?))[0-9a-z.-]+`)
+	Email = regexp.MustCompile(`[A-Za-z0-9_.]+((\ ?(\[|\()?\ ?@\ ?(\)|\])?\ ?)|(\ ?(\[|\()\ ?[aA][tT]\ ?(\)|\])\ ?))[0-9a-z.-]+`)
 
 	// DefaultSet
-	RegexDefaultSet = RuleSet([]*regexp.Regexp{RegexEmail})
+	DefaultRules = RuleSet{Email}
 )
 
 // -- Functions on RuleSet --
