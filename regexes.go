@@ -18,14 +18,15 @@ var (
 
 	// DefaultSet
 	DefaultRules = RuleSet{Email}
+	MatchAll     = RuleSet{regexp.MustCompile(`.*`)}
 )
 
 // -- Functions on RuleSet --
 
 // GetMatchedRules Given bytes return all regexes that match
-func (rules *RuleSet) GetMatchedRules(data *[]byte) []*regexp.Regexp {
+func (rules RuleSet) GetMatchedRules(data *[]byte) []*regexp.Regexp {
 	matched := []*regexp.Regexp{}
-	for _, rule := range *rules {
+	for _, rule := range rules {
 		if rule.Match(*data) {
 			matched = append(matched, rule)
 		}
@@ -35,8 +36,8 @@ func (rules *RuleSet) GetMatchedRules(data *[]byte) []*regexp.Regexp {
 }
 
 // MatchesRule Given bytes return if any rule matches
-func (rules *RuleSet) MatchesRule(data *json.RawMessage) bool {
-	for _, rule := range *rules {
+func (rules RuleSet) MatchesRule(data *json.RawMessage) bool {
+	for _, rule := range rules {
 		if rule.Match(*data) {
 			return true
 		}
@@ -48,10 +49,10 @@ func (rules *RuleSet) MatchesRule(data *json.RawMessage) bool {
 // MatchesRuleReader Given a reader, return true if any rule matches in the stream.  Will read ENTIRE READER
 // Spawns multiple go routines to check each rule
 // Use limit reader to prevent reading forever
-func (rules *RuleSet) MatchesRuleReader(ctx context.Context, reader io.Reader) bool {
+func (rules RuleSet) MatchesRuleReader(ctx context.Context, reader io.Reader) bool {
 	foundMatch := make(chan bool)
 	finishedWorkers := make(chan bool)
-	rulesLen := len(*rules)
+	rulesLen := len(rules)
 
 	workerContext, cancelWorkers := context.WithCancel(ctx)
 
@@ -59,7 +60,7 @@ func (rules *RuleSet) MatchesRuleReader(ctx context.Context, reader io.Reader) b
 	// Create reader and writer for each worker thread
 	workerWriters := []*io.PipeWriter{}
 	workerReaders := []*io.PipeReader{}
-	for range *rules {
+	for range rules {
 		r, w := io.Pipe()
 		workerWriters = append(workerWriters, w)
 		workerReaders = append(workerReaders, r)
@@ -114,7 +115,7 @@ func (rules *RuleSet) MatchesRuleReader(ctx context.Context, reader io.Reader) b
 	}
 
 	// Spawn worker for each rule
-	for i, rule := range *rules {
+	for i, rule := range rules {
 		go workerFunction(rule, workerReaders[i])
 	}
 
