@@ -37,7 +37,7 @@ func (rules RuleSet) GetMatchedRules(data []byte) RuleSet {
 // GetMatchedRulesReader Given a reader, return any rule matches in the stream.  Will read ENTIRE READER
 // Spawns multiple go routines to check each rule
 // Use limit reader to prevent reading forever
-func (rules RuleSet) GetMatchedRulesReader(ctx context.Context, reader io.Reader) RuleSet {
+func (rules RuleSet) GetMatchedRulesReader(ctx context.Context, reader io.ReadCloser) RuleSet {
 	matchedRules := make(chan *regexp.Regexp)
 	finishedWorkers := make(chan bool)
 

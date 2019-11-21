@@ -1,8 +1,9 @@
 package regexmachine
 
 import (
-	"bytes"
 	"context"
+	"io"
+	"io/ioutil"
 	"regexp"
 	"strings"
 	"testing"
@@ -23,27 +24,30 @@ func TestGetMatchedRulesReader(t *testing.T) {
 	}
 
 	// Should match
-	matchedRules := rules.GetMatchedRulesReader(context.Background(), strings.NewReader(checkMe))
+	matchedRules := rules.GetMatchedRulesReader(context.Background(), ioutil.NopCloser(strings.NewReader(checkMe)))
 	if len(matchedRules) == 0 {
 		t.Errorf("Should have matched")
 	}
 
-	var buf bytes.Buffer
-
-	// Write 1MB of "A" to the buffer
-	// Then "text to match"
-	for i := 0; i < 1024*1024; i++ {
-		buf.Write([]byte("A"))
-	}
-	buf.Write([]byte("matchme!"))
+	pipeReader, pipeWriter := io.Pipe()
 
 	rules = RuleSet{
 		regexp.MustCompile(`AB`),
 		regexp.MustCompile(`matchme`),
 	}
 
+	// Write 10KB of "A" to the buffer
+	// Then "text to match"
+	go func() {
+		for i := 0; i < 1024*10; i++ {
+			pipeWriter.Write([]byte("AAAAAAAAAA"))
+		}
+		pipeWriter.Write([]byte("matchme!"))
+		pipeWriter.Close()
+	}()
+
 	// Should match
-	matchedRules = rules.GetMatchedRulesReader(context.Background(), &buf)
+	matchedRules = rules.GetMatchedRulesReader(context.Background(), pipeReader)
 	if len(matchedRules) == 0 {
 		t.Errorf("Should have matched")
 	}
