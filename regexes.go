@@ -4,15 +4,14 @@ package regexmachine
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"io"
 	"regexp"
 )
 
-// RuleSet Rules to check against
+// RuleSet A set of regex rules
 type RuleSet []*regexp.Regexp
 
-// Public regexes
+// Public regex sets
 var (
 	Email = regexp.MustCompile(`[A-Za-z0-9_.]+((\ ?(\[|\()?\ ?@\ ?(\)|\])?\ ?)|(\ ?(\[|\()\ ?[aA][tT]\ ?(\)|\])\ ?))[0-9a-z.-]+`)
 
@@ -24,10 +23,10 @@ var (
 // -- Functions on RuleSet --
 
 // GetMatchedRules Given bytes return all regexes that match
-func (rules RuleSet) GetMatchedRules(data *[]byte) []*regexp.Regexp {
+func (rules RuleSet) GetMatchedRules(data []byte) RuleSet {
 	matched := []*regexp.Regexp{}
 	for _, rule := range rules {
-		if rule.Match(*data) {
+		if rule.Match(data) {
 			matched = append(matched, rule)
 		}
 	}
@@ -35,26 +34,12 @@ func (rules RuleSet) GetMatchedRules(data *[]byte) []*regexp.Regexp {
 	return matched
 }
 
-// MatchesRule Given bytes return if any rule matches
-func (rules RuleSet) MatchesRule(data *json.RawMessage) bool {
-	for _, rule := range rules {
-		if rule.Match(*data) {
-			return true
-		}
-	}
-
-	return false
-}
-
-// MatchesRuleReader Given a reader, return true if any rule matches in the stream.  Will read ENTIRE READER
+// GetMatchedRulesReader Given a reader, return any rule matches in the stream.  Will read ENTIRE READER
 // Spawns multiple go routines to check each rule
 // Use limit reader to prevent reading forever
-func (rules RuleSet) MatchesRuleReader(ctx context.Context, reader io.Reader) bool {
-	foundMatch := make(chan bool)
+func (rules RuleSet) GetMatchedRulesReader(ctx context.Context, reader io.Reader) RuleSet {
+	matchedRules := make(chan *regexp.Regexp)
 	finishedWorkers := make(chan bool)
-	rulesLen := len(rules)
-
-	workerContext, cancelWorkers := context.WithCancel(ctx)
 
 	// We need to duplicate the reader stream for each worker
 	// Create reader and writer for each worker thread
@@ -65,6 +50,8 @@ func (rules RuleSet) MatchesRuleReader(ctx context.Context, reader io.Reader) bo
 		workerWriters = append(workerWriters, w)
 		workerReaders = append(workerReaders, r)
 	}
+
+	ctxWorkers, cancelWorkers := context.WithCancel(ctx)
 
 	// Read stream duplicator to write to all workerWriters
 	go func() {
@@ -90,7 +77,7 @@ func (rules RuleSet) MatchesRuleReader(ctx context.Context, reader io.Reader) bo
 
 			// Check if we are canceled
 			select {
-			case <-workerContext.Done():
+			case <-ctxWorkers.Done():
 				return
 			default:
 			}
@@ -100,17 +87,18 @@ func (rules RuleSet) MatchesRuleReader(ctx context.Context, reader io.Reader) bo
 	// Worker function
 	workerFunction := func(workerRule *regexp.Regexp, workerReader *io.PipeReader) {
 		if workerRule.MatchReader(bufio.NewReader(workerReader)) {
-			// Mark us found
+			// Mark this rule as matched
 			select {
-			case foundMatch <- true:
-			case <-workerContext.Done():
+			case matchedRules <- workerRule:
+			case <-ctxWorkers.Done():
+				return
 			}
-		} else {
-			// Mark us done
-			select {
-			case finishedWorkers <- true:
-			case <-workerContext.Done():
-			}
+		}
+		// Mark us done
+		select {
+		case finishedWorkers <- true:
+		case <-ctxWorkers.Done():
+			return
 		}
 	}
 
@@ -119,24 +107,29 @@ func (rules RuleSet) MatchesRuleReader(ctx context.Context, reader io.Reader) bo
 		go workerFunction(rule, workerReaders[i])
 	}
 
-	finishedWorkersCount := 0
+	// Routine to capture all matches
+	matches := RuleSet{}
+	go func() {
+		for match := range matchedRules {
+			matches = append(matches, match)
+		}
+	}()
 
-	// Wait to see if we found a match
-	for {
+	// Wait for threads to finish
+	finishedWorkersCount := 0
+	for finishedWorkersCount != len(rules) {
 		select {
 		case <-ctx.Done():
 			cancelWorkers()
-			return false
-		case <-foundMatch:
-			cancelWorkers()
-			return true
-		case <-finishedWorkers: // a go routines finished
+			return nil
+		case <-finishedWorkers: // a go routine finished
 			finishedWorkersCount++
-			if finishedWorkersCount == rulesLen {
-				// All go routines finished
-				cancelWorkers()
-				return false
-			}
 		}
 	}
+
+	close(matchedRules)
+	cancelWorkers()
+
+	// Return found matches
+	return matches
 }

@@ -12,7 +12,7 @@ func TestGetMatchedRules(t *testing.T) {
 
 }
 
-func TestMatchesRuleReader(t *testing.T) {
+func TestGetMatchedRulesReader(t *testing.T) {
 	checkMe := "This is a string of text"
 
 	rules := RuleSet{
@@ -23,8 +23,8 @@ func TestMatchesRuleReader(t *testing.T) {
 	}
 
 	// Should match
-	matched := rules.MatchesRuleReader(context.Background(), strings.NewReader(checkMe))
-	if !matched {
+	matchedRules := rules.GetMatchedRulesReader(context.Background(), strings.NewReader(checkMe))
+	if len(matchedRules) == 0 {
 		t.Errorf("Should have matched")
 	}
 
@@ -43,8 +43,8 @@ func TestMatchesRuleReader(t *testing.T) {
 	}
 
 	// Should match
-	matched = rules.MatchesRuleReader(context.Background(), &buf)
-	if !matched {
+	matchedRules = rules.GetMatchedRulesReader(context.Background(), &buf)
+	if len(matchedRules) == 0 {
 		t.Errorf("Should have matched")
 	}
 }
