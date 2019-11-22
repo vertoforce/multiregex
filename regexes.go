@@ -127,10 +127,12 @@ func (rules RuleSet) GetMatchedRulesReader(ctx context.Context, reader io.ReadCl
 
 	// Routine to capture all matches
 	matches := RuleSet{}
+	finishedCapturingMatches := make(chan int)
 	go func() {
 		for match := range matchedRules {
 			matches = append(matches, match)
 		}
+		finishedCapturingMatches <- 0
 	}()
 
 	// Wait for threads to finish
@@ -147,6 +149,9 @@ func (rules RuleSet) GetMatchedRulesReader(ctx context.Context, reader io.ReadCl
 
 	close(matchedRules)
 	cancelWorkers()
+
+	// Wait for match capture thread to finish
+	<-finishedCapturingMatches
 
 	// Return found matches
 	return matches
