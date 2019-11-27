@@ -1,3 +1,3 @@
-module github.com/vertoforce/muiltiregex
+module github.com/vertoforce/multiregex
 
 go 1.12

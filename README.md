@@ -6,7 +6,7 @@ In this library we call a set of regex rules (`[]*regexp.Regexp`) a `RuleSet`.
 
 ## Usage
 
-Currently there are two functions avaialable.
+Currently there are two functions available.
 
 `func (rules RuleSet) GetMatchedRules(data []byte) RuleSet {}`
 
