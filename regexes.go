@@ -1,5 +1,5 @@
-// Package regexmachine helps with processing regex rules of streams of data and looking for rule matches
-package regexmachine
+// Package multiregex helps manage sets of regex rules to check against data and streams
+package multiregex
 
 import (
 	"bufio"

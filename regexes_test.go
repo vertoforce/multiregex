@@ -1,4 +1,4 @@
-package regexmachine
+package multiregex
 
 import (
 	"context"
