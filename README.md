@@ -19,3 +19,20 @@ Currently there are four functions available.
 - These function returns matched rules or returns true (ASAP) on the reader
 - This function opens multiple go routines to scan the input stream concurrently against all rules
 - This function will _read_ all data in the reader.
+
+## Example
+
+```go
+checkMe := ioutil.NopCloser(strings.NewReader("This is a string of text"))
+
+// Check to make sure it matches
+rules := RuleSet{
+    regexp.MustCompile(`random text to test for`),
+    regexp.MustCompile(`random text to test for two`),
+    regexp.MustCompile(`string o`),
+    regexp.MustCompile(`random text to test for three`),
+}
+fmt.Println(rules.GetMatchedRulesReader(context.Background(), checkMe))
+
+// Output: [string o]
+```

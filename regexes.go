@@ -4,7 +4,6 @@ package multiregex
 import (
 	"bufio"
 	"context"
-	"fmt"
 	"io"
 	"regexp"
 )
