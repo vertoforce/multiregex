@@ -4,6 +4,7 @@ package multiregex
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"io"
 	"regexp"
 )
@@ -40,6 +41,14 @@ var (
 
 // -- Functions on RuleSet --
 
+// MatchesRules Given bytes return if any rule matches
+func (rules RuleSet) MatchesRules(data []byte) bool {
+	if len(rules.GetMatchedRules(data)) > 0 {
+		return true
+	}
+	return false
+}
+
 // GetMatchedRules Given bytes return all regexes that match
 func (rules RuleSet) GetMatchedRules(data []byte) RuleSet {
 	matched := []*regexp.Regexp{}
@@ -50,6 +59,22 @@ func (rules RuleSet) GetMatchedRules(data []byte) RuleSet {
 	}
 
 	return matched
+}
+
+// MatchesRulesReader Given reader, return true as soon as any rule matches, or false.
+func (rules RuleSet) MatchesRulesReader(ctx context.Context, reader io.ReadCloser) bool {
+
+	subContext, cancel := context.WithCancel(ctx)
+	matches := rules.getMatchedRulesReaderChan(subContext, reader)
+
+	// Return as soon we get a match
+	for range matches {
+		cancel() // Stop any other workers
+		return true
+	}
+
+	cancel()
+	return false
 }
 
 // GetMatchedRulesReader Given a reader, return any rule matches in the stream.  Will read ENTIRE READER
@@ -154,6 +179,7 @@ func (rules RuleSet) getMatchedRulesReaderChan(ctx context.Context, reader io.Re
 			select {
 			case <-ctx.Done():
 				cancelWorkers()
+				return
 			case <-finishedWorkers: // a go routine finished
 				finishedWorkersCount++
 			}

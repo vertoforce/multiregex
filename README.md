@@ -6,14 +6,16 @@ In this library we call a set of regex rules (`[]*regexp.Regexp`) a `RuleSet`.
 
 ## Usage
 
-Currently there are two functions available.
+Currently there are four functions available.
 
 `func (rules RuleSet) GetMatchedRules(data []byte) RuleSet {}`
+`func (rules RuleSet) MatchesRules(data []byte) bool {}`
 
-- This function returns matched rules on the provided data
+- These function returns matched rules or returns true (ASAP) on the provided data
 
 `func (rules RuleSet) GetMatchedRulesReader(ctx context.Context, reader io.ReadCloser) RuleSet {}`
+`func (rules RuleSet) MatchesRulesReader(ctx context.Context, reader io.ReadCloser) bool {}`
 
-- This function returns matches rules in the reader.
+- These function returns matched rules or returns true (ASAP) on the reader
 - This function opens multiple go routines to scan the input stream concurrently against all rules
 - This function will _read_ all data in the reader.
