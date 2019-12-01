@@ -56,6 +56,25 @@ func (rules RuleSet) GetMatchedRules(data []byte) RuleSet {
 // Spawns multiple go routines to check each rule
 // Use limit reader to prevent reading forever
 func (rules RuleSet) GetMatchedRulesReader(ctx context.Context, reader io.ReadCloser) RuleSet {
+	matchedRules := rules.getMatchedRulesReaderChan(ctx, reader)
+
+	// Routine to capture all matches
+	matches := RuleSet{}
+	finishedCapturingMatches := make(chan int)
+	go func() {
+		for match := range matchedRules {
+			matches = append(matches, match)
+		}
+		finishedCapturingMatches <- 0
+	}()
+	// Wait for match capture thread to finish
+	<-finishedCapturingMatches
+
+	return matches
+}
+
+// getMatchedRulesReaderChan Given a reader, return channel of rule matches in the stream.
+func (rules RuleSet) getMatchedRulesReaderChan(ctx context.Context, reader io.ReadCloser) chan *regexp.Regexp {
 	matchedRules := make(chan *regexp.Regexp)
 	finishedWorkers := make(chan bool)
 
@@ -125,34 +144,22 @@ func (rules RuleSet) GetMatchedRulesReader(ctx context.Context, reader io.ReadCl
 		go workerFunction(rule, workerReaders[i])
 	}
 
-	// Routine to capture all matches
-	matches := RuleSet{}
-	finishedCapturingMatches := make(chan int)
+	// Wait for threads to finish then close channel
 	go func() {
-		for match := range matchedRules {
-			matches = append(matches, match)
+		defer cancelWorkers()     // Close all workers incase one is stuck
+		defer close(matchedRules) // Close matchedRules
+
+		finishedWorkersCount := 0
+		for finishedWorkersCount != len(rules) {
+			select {
+			case <-ctx.Done():
+				cancelWorkers()
+			case <-finishedWorkers: // a go routine finished
+				finishedWorkersCount++
+			}
 		}
-		finishedCapturingMatches <- 0
 	}()
 
-	// Wait for threads to finish
-	finishedWorkersCount := 0
-	for finishedWorkersCount != len(rules) {
-		select {
-		case <-ctx.Done():
-			cancelWorkers()
-			return nil
-		case <-finishedWorkers: // a go routine finished
-			finishedWorkersCount++
-		}
-	}
-
-	close(matchedRules)
-	cancelWorkers()
-
-	// Wait for match capture thread to finish
-	<-finishedCapturingMatches
-
 	// Return found matches
-	return matches
+	return matchedRules
 }
