@@ -78,7 +78,7 @@ func (rules RuleSet) GetMatchedData(data []byte) [][]byte {
 func (rules RuleSet) MatchesRulesReader(ctx context.Context, reader io.ReadCloser) bool {
 
 	subContext, cancel := context.WithCancel(ctx)
-	matches := rules.getMatchedRulesReaderChan(subContext, reader)
+	matches := rules.GetMatchedRulesReader(subContext, reader)
 
 	// Return as soon we get a match
 	for range matches {
@@ -90,30 +90,8 @@ func (rules RuleSet) MatchesRulesReader(ctx context.Context, reader io.ReadClose
 	return false
 }
 
-// GetMatchedRulesReader Given a reader, return any rule matches in the stream.  Will read ENTIRE READER
-// Spawns multiple go routines to check each rule
-// Use limit reader to prevent reading forever
-func (rules RuleSet) GetMatchedRulesReader(ctx context.Context, reader io.ReadCloser) RuleSet {
-	matchedRules := rules.getMatchedRulesReaderChan(ctx, reader)
-
-	// Routine to capture all matches
-	matches := RuleSet{}
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		for match := range matchedRules {
-			matches = append(matches, match)
-		}
-		wg.Done()
-	}()
-	// Wait for match capture thread to finish
-	wg.Wait()
-
-	return matches
-}
-
-// getMatchedRulesReaderChan Given a reader, return channel of rule matches in the stream.
-func (rules RuleSet) getMatchedRulesReaderChan(ctx context.Context, reader io.ReadCloser) chan *regexp.Regexp {
+// GetMatchedRulesReader Given a reader, return channel of rule matches in the stream.
+func (rules RuleSet) GetMatchedRulesReader(ctx context.Context, reader io.ReadCloser) chan *regexp.Regexp {
 	matchedRules := make(chan *regexp.Regexp)
 
 	// We need to duplicate the reader stream for each worker
@@ -145,10 +123,9 @@ func (rules RuleSet) getMatchedRulesReaderChan(ctx context.Context, reader io.Re
 
 	// Wait for threads to finish then close channel
 	go func() {
-		defer cancelWorkers()     // Close all workers incase one is stuck
-		defer close(matchedRules) // Close matchedRules
-
 		wg.Wait()
+		cancelWorkers()     // Close all workers incase one is stuck
+		close(matchedRules) // Close matchedRules
 	}()
 
 	// Return found matches
