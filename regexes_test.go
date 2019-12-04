@@ -90,8 +90,12 @@ func TestGetMatchedRulesReader(t *testing.T) {
 
 	// Should match
 	matchedRules := rules.GetMatchedRulesReader(context.Background(), ioutil.NopCloser(strings.NewReader(checkMe)))
-	if len(matchedRules) == 0 {
-		t.Errorf("Should have matched")
+	i := 0
+	for range matchedRules {
+		i++
+	}
+	if i != 1 {
+		t.Errorf("Should have matched once")
 	}
 
 	pipeReader, pipeWriter := io.Pipe()
@@ -113,7 +117,11 @@ func TestGetMatchedRulesReader(t *testing.T) {
 
 	// Should match
 	matchedRules = rules.GetMatchedRulesReader(context.Background(), pipeReader)
-	if len(matchedRules) == 0 {
-		t.Errorf("Should have matched")
+	i = 0
+	for range matchedRules {
+		i++
+	}
+	if i != 1 {
+		t.Errorf("Should have matched once")
 	}
 }

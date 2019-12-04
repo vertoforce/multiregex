@@ -1,2 +1,2 @@
-golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e h1:vcxGaoTs7kV8m5Np9uUNQin4BrLOthgV7252N8V+FwY=
-golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
+github.com/vertoforce/streamregex v0.0.0-20191204224809-6c2aea54d18d h1:lzDii3DTFOlBvB4I6ygMC+y0SeXDlsvJySTcQrf2Pt0=
+github.com/vertoforce/streamregex v0.0.0-20191204224809-6c2aea54d18d/go.mod h1:iCqagidmqS8asUBG0F6WCy0VqQfAbDUccs5X0y0BS6M=

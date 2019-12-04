@@ -9,21 +9,22 @@ In this library we call a set of regex rules (`[]*regexp.Regexp`) a `RuleSet`.
 Currently there are four functions available.
 
 ```go
-func (rules RuleSet) GetMatchedRules(data []byte) RuleSet {}
 func (rules RuleSet) MatchesRules(data []byte) bool {}
+func (rules RuleSet) GetMatchedRules(data []byte) RuleSet {}
 func (rules RuleSet) GetMatchedData(data []byte) [][]byte {}
 ```
 
 - These functions perform regex operations on byte slices
 
 ```go
-func (rules RuleSet) GetMatchedRulesReader(ctx context.Context, reader io.ReadCloser) RuleSet {}
 func (rules RuleSet) MatchesRulesReader(ctx context.Context, reader io.ReadCloser) bool {}
+func (rules RuleSet) GetMatchedRulesReader(ctx context.Context, reader io.ReadCloser) RuleSet {}
+func (rules RuleSet) GetMatchedDataReader(ctx context.Context, reader io.ReadCloser) chan []byte {
 ```
 
 - These functions perform regex operations on readers
 - These functions open multiple go routines to scan the input stream concurrently against all rules
-- These functions will _read all data_ in the reader.
+- These functions may _read all data_ in the reader.
 
 ## Example
 

@@ -2,4 +2,4 @@ module github.com/vertoforce/multiregex
 
 go 1.12
 
-require golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e // indirect
+require github.com/vertoforce/streamregex v0.0.0-20191204224809-6c2aea54d18d
