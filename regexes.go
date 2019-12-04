@@ -6,6 +6,7 @@ import (
 	"context"
 	"io"
 	"regexp"
+	"sync"
 )
 
 // RuleSet A set of regex rules
@@ -60,6 +61,19 @@ func (rules RuleSet) GetMatchedRules(data []byte) RuleSet {
 	return matched
 }
 
+// GetMatchedData Gets a slice of the matched data from the regexes
+func (rules RuleSet) GetMatchedData(data []byte) [][]byte {
+	allMatches := [][]byte{}
+	for _, rule := range rules {
+		matches := rule.FindAll(data, -1)
+		for _, match := range matches {
+			allMatches = append(allMatches, match)
+		}
+	}
+
+	return allMatches
+}
+
 // MatchesRulesReader Given reader, return true as soon as any rule matches, or false.
 func (rules RuleSet) MatchesRulesReader(ctx context.Context, reader io.ReadCloser) bool {
 
@@ -84,15 +98,16 @@ func (rules RuleSet) GetMatchedRulesReader(ctx context.Context, reader io.ReadCl
 
 	// Routine to capture all matches
 	matches := RuleSet{}
-	finishedCapturingMatches := make(chan int)
+	wg := sync.WaitGroup{}
+	wg.Add(1)
 	go func() {
 		for match := range matchedRules {
 			matches = append(matches, match)
 		}
-		finishedCapturingMatches <- 0
+		wg.Done()
 	}()
 	// Wait for match capture thread to finish
-	<-finishedCapturingMatches
+	wg.Wait()
 
 	return matches
 }
@@ -100,53 +115,18 @@ func (rules RuleSet) GetMatchedRulesReader(ctx context.Context, reader io.ReadCl
 // getMatchedRulesReaderChan Given a reader, return channel of rule matches in the stream.
 func (rules RuleSet) getMatchedRulesReaderChan(ctx context.Context, reader io.ReadCloser) chan *regexp.Regexp {
 	matchedRules := make(chan *regexp.Regexp)
-	finishedWorkers := make(chan bool)
 
 	// We need to duplicate the reader stream for each worker
 	// Create reader and writer for each worker thread
-	workerWriters := []*io.PipeWriter{}
-	workerReaders := []*io.PipeReader{}
-	for range rules {
-		r, w := io.Pipe()
-		workerWriters = append(workerWriters, w)
-		workerReaders = append(workerReaders, r)
-	}
-
 	ctxWorkers, cancelWorkers := context.WithCancel(ctx)
+	workerReaders := multiplyStream(ctxWorkers, reader, len(rules))
 
-	// Read stream duplicator to write to all workerWriters
-	go func() {
-		// Defer closing all workers
-		closeAll := func() {
-			for _, writer := range workerWriters {
-				writer.Close()
-			}
-		}
-		defer closeAll()
+	wg := sync.WaitGroup{}
 
-		for {
-			// Read
-			buf := make([]byte, 1024)
-			if _, err := reader.Read(buf); err != nil {
-				return
-			}
+	// Worker function to scan for regex match
+	workerFunction := func(workerRule *regexp.Regexp, workerReader io.ReadCloser) {
+		defer wg.Done()
 
-			// Writer to each worker stream
-			for _, writer := range workerWriters {
-				writer.Write(buf)
-			}
-
-			// Check if we are canceled
-			select {
-			case <-ctxWorkers.Done():
-				return
-			default:
-			}
-		}
-	}()
-
-	// Worker function
-	workerFunction := func(workerRule *regexp.Regexp, workerReader *io.PipeReader) {
 		if workerRule.MatchReader(bufio.NewReader(workerReader)) {
 			// Mark this rule as matched
 			select {
@@ -155,16 +135,11 @@ func (rules RuleSet) getMatchedRulesReaderChan(ctx context.Context, reader io.Re
 				return
 			}
 		}
-		// Mark us done
-		select {
-		case finishedWorkers <- true:
-		case <-ctxWorkers.Done():
-			return
-		}
 	}
 
 	// Spawn worker for each rule
 	for i, rule := range rules {
+		wg.Add(1)
 		go workerFunction(rule, workerReaders[i])
 	}
 
@@ -173,16 +148,7 @@ func (rules RuleSet) getMatchedRulesReaderChan(ctx context.Context, reader io.Re
 		defer cancelWorkers()     // Close all workers incase one is stuck
 		defer close(matchedRules) // Close matchedRules
 
-		finishedWorkersCount := 0
-		for finishedWorkersCount != len(rules) {
-			select {
-			case <-ctx.Done():
-				cancelWorkers()
-				return
-			case <-finishedWorkers: // a go routine finished
-				finishedWorkersCount++
-			}
-		}
+		wg.Wait()
 	}()
 
 	// Return found matches
