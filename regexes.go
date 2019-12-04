@@ -7,6 +7,8 @@ import (
 	"io"
 	"regexp"
 	"sync"
+
+	"github.com/vertoforce/streamregex"
 )
 
 // RuleSet A set of regex rules
@@ -130,4 +132,52 @@ func (rules RuleSet) GetMatchedRulesReader(ctx context.Context, reader io.ReadCl
 
 	// Return found matches
 	return matchedRules
+}
+
+// GetMatchedDataReader Given a reader, return channel of matching data in the stream, NOTE this function
+// does a ring buffer because we cannot get data of matches on a stream directly.
+// It uses the default RingBufferSize of 1MB and overlap of 1KB
+func (rules RuleSet) GetMatchedDataReader(ctx context.Context, reader io.ReadCloser) chan []byte {
+	matchedData := make(chan []byte)
+
+	// We need to duplicate the reader stream for each worker
+	// Create reader and writer for each worker thread
+	ctxWorkers, cancelWorkers := context.WithCancel(ctx)
+	workerReaders := multiplyStream(ctxWorkers, reader, len(rules))
+
+	wg := sync.WaitGroup{}
+
+	// Worker function to scan for regex match
+	workerFunction := func(workerRule *regexp.Regexp, workerReader io.ReadCloser) {
+		defer wg.Done()
+
+		sRegex := streamregex.NewRegex(workerRule)
+		ctxScan, cancel := context.WithCancel(ctx)
+		matches := sRegex.FindReader(ctxScan, workerReader)
+		for match := range matches {
+			select {
+			case matchedData <- match:
+			case <-ctx.Done():
+				cancel()
+				return
+			}
+		}
+		cancel()
+	}
+
+	// Spawn worker for each rule
+	for i, rule := range rules {
+		wg.Add(1)
+		go workerFunction(rule, workerReaders[i])
+	}
+
+	// Wait for threads to finish then close channel
+	go func() {
+		wg.Wait()
+		cancelWorkers()    // Close all workers incase one is stuck
+		close(matchedData) // Close matchedRules
+	}()
+
+	// Return found matches
+	return matchedData
 }
