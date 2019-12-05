@@ -134,11 +134,17 @@ func (rules RuleSet) GetMatchedRulesReader(ctx context.Context, reader io.ReadCl
 	return matchedRules
 }
 
+// Match of data with regex rule
+type Match struct {
+	Data []byte
+	Rule *regexp.Regexp
+}
+
 // GetMatchedDataReader Given a reader, return channel of matching data in the stream, NOTE this function
 // does a ring buffer because we cannot get data of matches on a stream directly.
 // It uses the default RingBufferSize of 1MB and overlap of 1KB
-func (rules RuleSet) GetMatchedDataReader(ctx context.Context, reader io.ReadCloser) chan []byte {
-	matchedData := make(chan []byte)
+func (rules RuleSet) GetMatchedDataReader(ctx context.Context, reader io.ReadCloser) chan Match {
+	matchedData := make(chan Match)
 
 	// We need to duplicate the reader stream for each worker
 	// Create reader and writer for each worker thread
@@ -156,7 +162,7 @@ func (rules RuleSet) GetMatchedDataReader(ctx context.Context, reader io.ReadClo
 		matches := sRegex.FindReader(ctxScan, workerReader)
 		for match := range matches {
 			select {
-			case matchedData <- match:
+			case matchedData <- Match{Data: match, Rule: workerRule}:
 			case <-ctx.Done():
 				cancel()
 				return

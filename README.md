@@ -19,7 +19,7 @@ func (rules RuleSet) GetMatchedData(data []byte) [][]byte {}
 ```go
 func (rules RuleSet) MatchesRulesReader(ctx context.Context, reader io.ReadCloser) bool {}
 func (rules RuleSet) GetMatchedRulesReader(ctx context.Context, reader io.ReadCloser) RuleSet {}
-func (rules RuleSet) GetMatchedDataReader(ctx context.Context, reader io.ReadCloser) chan []byte {
+func (rules RuleSet) GetMatchedDataReader(ctx context.Context, reader io.ReadCloser) chan Match {}
 ```
 
 - These functions perform regex operations on readers
