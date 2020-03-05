@@ -11,6 +11,10 @@ import (
 	"github.com/vertoforce/streamregex"
 )
 
+const (
+	DefaultMaxMatchLength = 1024 * 1024 // 1KB
+)
+
 // RuleSet A set of regex rules
 type RuleSet []*regexp.Regexp
 
@@ -140,10 +144,10 @@ type Match struct {
 	Rule *regexp.Regexp
 }
 
-// GetMatchedDataReader Given a reader, return channel of matching data in the stream, NOTE this function
-// does a ring buffer because we cannot get data of matches on a stream directly.
-// It uses the default RingBufferSize of 1MB and overlap of 1KB
-func (rules RuleSet) GetMatchedDataReader(ctx context.Context, reader io.ReadCloser) chan Match {
+// GetMatchedDataReader Given a reader, return a channel of matching data in the stream.  The maxMatchLengths
+// represents the max length of each regex rule.  This is necessary for getting the matched data in the stream (see streamregex library)
+// If no maxLength is specified for a regex it will use this package's DefaultMatchMatchLength
+func (rules RuleSet) GetMatchedDataReader(ctx context.Context, reader io.ReadCloser, maxMatchLengths map[*regexp.Regexp]int) chan Match {
 	matchedData := make(chan Match)
 
 	// We need to duplicate the reader stream for each worker
@@ -153,16 +157,22 @@ func (rules RuleSet) GetMatchedDataReader(ctx context.Context, reader io.ReadClo
 
 	wg := sync.WaitGroup{}
 
+	getMaxMatchLength := func(regex *regexp.Regexp) int {
+		if val, ok := maxMatchLengths[regex]; ok {
+			return val
+		}
+		return DefaultMaxMatchLength
+	}
+
 	// Worker function to scan for regex match
 	workerFunction := func(workerRule *regexp.Regexp, workerReader io.ReadCloser) {
 		defer wg.Done()
 
-		sRegex := streamregex.NewRegex(workerRule)
 		ctxScan, cancel := context.WithCancel(ctx)
-		matches := sRegex.FindReader(ctxScan, workerReader)
+		matches := streamregex.FindReader(ctxScan, workerRule, getMaxMatchLength(workerRule), workerReader)
 		for match := range matches {
 			select {
-			case matchedData <- Match{Data: match, Rule: workerRule}:
+			case matchedData <- Match{Data: []byte(match), Rule: workerRule}:
 			case <-ctx.Done():
 				cancel()
 				return
